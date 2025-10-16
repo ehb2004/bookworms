@@ -1,0 +1,42 @@
+body {
+  background-color: #e2d4c6;
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Sidebar customizations */
+.custom-sidebar {
+  background-color: #1e4f74;
+}
+
+.custom-sidebar .text-white {
+  color: #e2d4c6 !important;
+}
+
+.custom-sidebar a:hover {
+  color: #ad9e8f !important;
+  text-decoration: underline;
+}
+
+/* Custom tab highlight color */
+.custom-sidebar .nav-item {
+  width: 100%;
+}
+
+.custom-sidebar .nav-link {
+  width: 100% !important;
+  display: block !important;
+  padding: 0.5rem 1rem !important;
+}
+
+.custom-sidebar .nav-link.active {
+  background-color: #258766 !important;
+  color: #000 !important;
+  border-radius: 5px !important;
+} 
+
+.custom-sidebar .nav-link:hover {
+  background-color: rgba(148, 204, 185, 0.3) !important;
+  border-radius: 5px !important;
+}
