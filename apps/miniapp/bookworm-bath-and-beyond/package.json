@@ -1,0 +1,32 @@
+{
+  "name": "bookworm-bath-and-beyond",
+  "version": "1.0.0",
+  "description": "stuff",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon app.mjs",
+    "start": "node app.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ehb2004/bookworm-bath-and-beyond.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ehb2004/bookworm-bath-and-beyond/issues"
+  },
+  "homepage": "https://github.com/ehb2004/bookworm-bath-and-beyond#readme",
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "mongodb": "^6.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
