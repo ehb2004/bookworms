@@ -14,3 +14,24 @@ Using Whispering Pages allows readers to see how much they have read in the last
 
 ### User Story
 A 21-year-old female who likes reading and book shopping wants to be able to log their books and see them anywhere. She tends to buy the same books, as she does not remember what she books she has. Additonally, she enjoys being able to see what she wants to read and what her friends think of those books. This system allows her to see what she has read, what her friends have read, what she wants to read with her friends thoughts on them.
+## Team Artifacts
+[Meet the team](https://github.com/ehb2004/bookworms/wiki/%F0%9F%91%A5-TEAM-ARTIFACT)
+## Product Overview
+[Overview of the product](https://github.com/ehb2004/bookworms/wiki/%F0%9F%92%A1-PRODUCT-OVERVIEW)
+## Links 
+[Wiki](https://github.com/ehb2004/bookworms/wiki)
+
+[Project Board](https://github.com/users/ehb2004/projects/1)
+# Library Management App
+
+### Authorship and Attributions
+Created by Erika Beasley for CIS-486.
+- https://dev.to/codeply/bootstrap-5-sidebar-examples-38pb
+- https://github.com/barrycumbie/stunning-octo-fortnight-hello-express
+- https://www.figma.com/color-palette-generator/
+
+## User Story
+As an avid reader, I wanted to track my books in order to organize my reading and help me find my next read!!
+
+## Narrative
+This app is just a fun project used to be able to keep a log of all of my books as well as whether or not I have read them.
