@@ -15,7 +15,7 @@ Using Whispering Pages allows readers to see how much they have read in the last
 ### User Story
 A 21-year-old female who likes reading and book shopping wants to be able to log their books and see them anywhere. She tends to buy the same books, as she does not remember what she books she has. Additonally, she enjoys being able to see what she wants to read and what her friends think of those books. This system allows her to see what she has read, what her friends have read, what she wants to read with her friends thoughts on them.
 ## Team Artifacts
-[Meet the team](https://github.com/ehb2004/bookworms/wiki/%F0%9F%91%A5-TEAM-ARTIFACT)
+[Meet the team](https://github.com/ehb2004/bookworms/wiki/%F0%9F%91%A5-TEAM-ARTIFACTS)
 ## Product Overview
 [Overview of the product](https://github.com/ehb2004/bookworms/wiki/%F0%9F%92%A1-PRODUCT-OVERVIEW)
 ## Links 
