@@ -27,7 +27,7 @@
               class="d-flex align-items-center pb-3 mb-md-0 me-md-auto text-white text-decoration-none"
             >
               <i class="bi bi-book fs-4 me-2"></i>
-              <span class="fs-5 d-none d-sm-inline">Erika's Library</span>
+              <span class="fs-5 d-none d-sm-inline">Whispering Pages</span>
             </a>
             <ul
               class="nav nav-pills flex-column mb-sm-auto mb-0 align-items-center align-items-sm-start"
@@ -71,9 +71,14 @@
           <!-- Home Tab -->
           <div id="home-tab" class="tab-content">
             <!-- Welcome Header -->
-            <div class="mb-4 text-center">
-              <h1>Welcome to Erika's Library</h1>
-              <p>Track reads and manage your library.</p>
+            <div class="mb-4 d-flex justify-content-between align-items-center">
+              <div>
+                <h1 class="mb-0">Welcome to Whispering Pages</h1>
+                <p class="mb-0">Track reads and manage your library.</p>
+              </div>
+              <div>
+                <button class="btn btn-outline-danger" onclick="logout()">Logout</button>
+              </div>
             </div>
             <!-- Current Read Card -->
             <div class="card mb-4">
@@ -295,6 +300,13 @@
 
     <script>
       // JavaScript to handle form submission and book management will go here
+      // Minimal logout: clear auth info and redirect to auth page
+      function logout() {
+        localStorage.removeItem('jwtToken');
+        localStorage.removeItem('username');
+        window.location.href = 'auth.html';
+      }
+
       function addBook() {
         const title = document.getElementById("book-title").value;
         const author = document.getElementById("book-author").value;
