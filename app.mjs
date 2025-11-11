@@ -22,12 +22,12 @@ const client = new MongoClient(uri, {
 
 // Taken from stunning-octo-fortnight-hello-express class example
 let db;
-let erikasBooks; //hopefully where I keep all of my books...
+let whisperingBooks; //hopefully where I keep all of my books...
 async function connectDB() {
   try {
     await client.connect();
     db = client.db("personalLibrary"); // Database name
-    erikasBooks = db.collection("books"); // Collection name
+    whisperingBooks = db.collection("books"); // Collection name
     console.log("Connected to MongoDB!");
   } catch (error) {
     console.error(
