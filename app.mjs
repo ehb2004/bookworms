@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
@@ -41,9 +43,143 @@ connectDB();
 app.use(express.static(join(__dirname, "public")));
 app.use(express.json());
 
-// Root route - serve the main library page
+// Root route - serve the main auth page so users login first
 app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, "public", "auth.html"));
+});
+
+// Provide explicit routes for other pages
+app.get('/library', (req, res) => {
   res.sendFile(join(__dirname, "public", "library.html"));
+});
+
+app.get('/library', (req, res) => {
+  res.sendFile(join(__dirname, "public", "library.html"));
+});
+
+
+// JWT Secret (in production, this should be in .env file)
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-for-demo-only';
+
+// JWT Middleware - Protect routes that require authentication
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+
+    req.user = user; // Add user info to request
+    next();
+  });
+}
+
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Simple validation
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (password.length < 5) {
+      return res.status(400).json({ error: 'Password must be at least 5 characters long' });
+    }
+
+    // Check if user already exists
+    const existingUser = await db.collection('users').findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create user
+    const user = { username, password: hashedPassword, createdAt: new Date() };
+    const result = await db.collection('users').insertOne(user);
+
+    console.log(`✅ New user registered: ${username}`);
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      userId: result.insertedId,
+      username: username
+    });
+  } catch (error) {
+    console.error('❌ Registration error:', error.message);
+    res.status(500).json({ error: 'Failed to register user: ' + error.message });
+  }
+});
+
+// Login user
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+
+    // Simple validation
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Find user
+    const user = await db.collection('users').findOne({ username });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
+    // Create JWT token
+    const tokenPayload = {
+      userId: user._id,
+      username: user.username
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+
+    console.log(`✅ User logged in: ${username}`);
+
+    res.json({
+      message: 'Login successful',
+      token: token,
+      user: { id: user._id, username: user.username }
+    });
+  } catch (error) {
+    console.error('❌ Login error:', error.message);
+    res.status(500).json({ error: 'Failed to login: ' + error.message });
+  }
+});
+
+// Get current user info (protected route example)
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(req.user.userId) },
+      { projection: { password: 0 } } // Don't return password
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get user info: ' + error.message });
+  }
 });
 
 /*
