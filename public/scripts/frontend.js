@@ -1,3 +1,9 @@
+  // Minimal logout: clear auth info and redirect to auth page
+      function logout() {
+        localStorage.removeItem('jwtToken');
+        localStorage.removeItem('username');
+        window.location.href = 'auth.html';
+      }     
       // JavaScript to handle form submission and book management will go here
       function addBook() {
         const title = document.getElementById("book-title").value;
