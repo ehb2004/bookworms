@@ -84,142 +84,140 @@
                                 </div>
                             </div>
                         `
-                )
-                .join("");
-            } else {
-              currentReadElement.textContent = "No book currently being read.";
-            }
-          })
-          .catch((error) => {
-            console.error("Error loading currently reading book:", error);
-            document.getElementById("current-read").textContent =
-              "Error loading currently reading book.";
-          });
+          )
+          .join("");
+      } else {
+        currentReadElement.textContent = "No book currently being read.";
       }
+    })
+    .catch((error) => {
+      console.error("Error loading currently read book:", error);
+      document.getElementById("current-read").textContent =
+        "Error loading currently read book.";
+    });
+}
 
-      // Edit book function - opens modal with book data
-      function editBook(id, title, author, genre, readStatus) {
-        console.log("editBook called with:", {
-          id,
-          title,
-          author,
-          genre,
-          readStatus,
-        });
+// Edit book function - opens modal with book data
+function editBook(id, title, author, genre, readStatus) {
+  console.log("editBook called with:", {
+    id,
+    title,
+    author,
+    genre,
+    readStatus
+  });
 
-        // Fill the form fields
-        document.getElementById("edit-book-id").value = id;
-        document.getElementById("edit-book-title").value = title;
-        document.getElementById("edit-book-author").value = author;
-        document.getElementById("edit-book-genre").value = genre;
-        document.getElementById("edit-book-status").value = readStatus;
+  // Fill the form fields
+  document.getElementById("edit-book-id").value = id;
+  document.getElementById("edit-book-title").value = title;
+  document.getElementById("edit-book-author").value = author;
+  document.getElementById("edit-book-genre").value = genre;
+  document.getElementById("edit-book-status").value = readStatus;
 
-        // Show the modal
-        const modalElement = document.getElementById("editBookModal");
-        console.log("Modal element found:", modalElement);
+  // Show the modal
+  const modalElement = document.getElementById("editBookModal");
+  console.log("Modal element found:", modalElement);
 
-        if (modalElement) {
-          const modal = new bootstrap.Modal(modalElement);
-          modal.show();
-          console.log("Modal should be showing now");
-        } else {
-          console.error("Modal element not found!");
-        }
+  if (modalElement) {
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+    console.log("Modal should be showing now");
+  } else {
+    console.error("Modal element not found!");
+  }
+}
+
+// Update book function - sends PUT request to API
+function updateBook() {
+  const id = document.getElementById("edit-book-id").value;
+  const title = document.getElementById("edit-book-title").value;
+  const author = document.getElementById("edit-book-author").value;
+  const genre = document.getElementById("edit-book-genre").value;
+  const readStatus = document.getElementById("edit-book-status").value;
+
+  fetch(`/api/books/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, author, genre, readStatus })
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      showToast(`Book "${title}" updated successfully`);
+
+      // Close the modal
+      const modal = bootstrap.Modal.getInstance(
+        document.getElementById("editBookModal")
+      );
+      modal.hide();
+
+      // Refresh the displays
+      loadCurrentlyReading();
+
+      // Refresh the current tab if it's completed or to-read
+      const activeTab = document.querySelector(".tab-content:not(.d-none)");
+      if (activeTab.id === "completed-tab") {
+        loadCompletedBooks();
+      } else if (activeTab.id === "toread-tab") {
+        loadToReadBooks();
       }
+    })
+    .catch((error) => {
+      showToast("Error updating book. Please try again.");
+    });
+}
 
-      // Update book function - sends PUT request to API
-      function updateBook() {
-        const id = document.getElementById("edit-book-id").value;
-        const title = document.getElementById("edit-book-title").value;
-        const author = document.getElementById("edit-book-author").value;
-        const genre = document.getElementById("edit-book-genre").value;
-        const readStatus = document.getElementById("edit-book-status").value;
+// Handle form submission
+document
+  .getElementById("add-book-form")
+  .addEventListener("submit", function (e) {
+    e.preventDefault();
+    addBook();
+  });
 
-        fetch(`/api/books/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, author, genre, readStatus }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            showToast(`Book "${title}" updated successfully`);
+// Tab switching function
+function showTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll(".tab-content").forEach((tab) => {
+    tab.classList.add("d-none");
+  });
 
-            // Close the modal
-            const modal = bootstrap.Modal.getInstance(
-              document.getElementById("editBookModal")
-            );
-            modal.hide();
+  // Remove active class from all nav links
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    link.classList.remove("active");
+  });
 
-            // Refresh the displays
-            loadCurrentlyReading();
+  // Show selected tab
+  document.getElementById(tabName + "-tab").classList.remove("d-none");
 
-            // Refresh the current tab if it's completed or to-read
-            const activeTab = document.querySelector(
-              ".tab-content:not(.d-none)"
-            );
-            if (activeTab.id === "completed-tab") {
-              loadCompletedBooks();
-            } else if (activeTab.id === "toread-tab") {
-              loadToReadBooks();
-            }
-          })
-          .catch((error) => {
-            showToast("Error updating book. Please try again.");
-          });
-      }
+  // Add active class to clicked nav link
+  event.target.closest(".nav-link").classList.add("active");
 
-      // Handle form submission
-      document
-        .getElementById("add-book-form")
-        .addEventListener("submit", function (e) {
-          e.preventDefault();
-          addBook();
-        });
+  // Load data for specific tabs
+  if (tabName === "completed") {
+    loadCompletedBooks();
+  } else if (tabName === "toread") {
+    loadToReadBooks();
+  }
+}
 
-      // Tab switching function
-      function showTab(tabName) {
-        // Hide all tabs
-        document.querySelectorAll(".tab-content").forEach((tab) => {
-          tab.classList.add("d-none");
-        });
+// Load completed books
+function loadCompletedBooks() {
+  fetch("/api/books")
+    .then((res) => res.json())
+    .then((books) => {
+      const completedBooks = books.filter(
+        (book) => book.readStatus === "completed"
+      );
+      const container = document.getElementById("completed-books-list");
 
-        // Remove active class from all nav links
-        document.querySelectorAll(".nav-link").forEach((link) => {
-          link.classList.remove("active");
-        });
-
-        // Show selected tab
-        document.getElementById(tabName + "-tab").classList.remove("d-none");
-
-        // Add active class to clicked nav link
-        event.target.closest(".nav-link").classList.add("active");
-
-        // Load data for specific tabs
-        if (tabName === "completed") {
-          loadCompletedBooks();
-        } else if (tabName === "toread") {
-          loadToReadBooks();
-        }
-      }
-
-      // Load completed books
-      function loadCompletedBooks() {
-        fetch("/api/books")
-          .then((res) => res.json())
-          .then((books) => {
-            const completedBooks = books.filter(
-              (book) => book.readStatus === "completed"
-            );
-            const container = document.getElementById("completed-books-list");
-
-            if (completedBooks.length === 0) {
-              container.innerHTML =
-                '<p class="text-muted">No completed books yet.</p>';
-            } else {
-              container.innerHTML = completedBooks
-                .map(
-                  (book) =>
-                    `<div class="card mb-2">
+      if (completedBooks.length === 0) {
+        container.innerHTML =
+          '<p class="text-muted">No completed books yet.</p>';
+      } else {
+        container.innerHTML = completedBooks
+          .map(
+            (book) =>
+              `<div class="card mb-2">
                                 <div class="card-body">
                                     <h6 class="card-title">${book.title}</h6>
                                     <p class="card-text">by ${book.author}</p>
@@ -245,33 +243,31 @@
                                     </div>
                                 </div>
                             </div>`
-                )
-                .join("");
-            }
-          })
-          .catch((error) => {
-            showToast("Error loading completed books.");
-          });
+          )
+          .join("");
       }
+    })
+    .catch((error) => {
+      showToast("Error loading completed books.");
+    });
+}
 
-      // Load to-read books
-      function loadToReadBooks() {
-        fetch("/api/books")
-          .then((res) => res.json())
-          .then((books) => {
-            const toReadBooks = books.filter(
-              (book) => book.readStatus === "to-read"
-            );
-            const container = document.getElementById("toread-books-list");
+// Load to-read books
+function loadToReadBooks() {
+  fetch("/api/books")
+    .then((res) => res.json())
+    .then((books) => {
+      const toReadBooks = books.filter((book) => book.readStatus === "to-read");
+      const container = document.getElementById("toread-books-list");
 
-            if (toReadBooks.length === 0) {
-              container.innerHTML =
-                '<p class="text-muted">No books in your reading list yet.</p>';
-            } else {
-              container.innerHTML = toReadBooks
-                .map(
-                  (book) =>
-                    `<div class="card mb-2">
+      if (toReadBooks.length === 0) {
+        container.innerHTML =
+          '<p class="text-muted">No books in your reading list yet.</p>';
+      } else {
+        container.innerHTML = toReadBooks
+          .map(
+            (book) =>
+              `<div class="card mb-2">
                                 <div class="card-body">
                                     <h6 class="card-title">${book.title}</h6>
                                     <p class="card-text">by ${book.author}</p>
@@ -297,119 +293,117 @@
                                     </div>
                                 </div>
                             </div>`
-                )
-                .join("");
-            }
-          })
-          .catch((error) => {
-            showToast("Error loading to-read books.");
-          });
+          )
+          .join("");
       }
+    })
+    .catch((error) => {
+      showToast("Error loading to-read books.");
+    });
+}
 
-      // Load currently reading book when page loads
-      window.addEventListener("load", function () {
-        loadCurrentlyReading();
-      });
+// Load currently reading book when page loads
+window.addEventListener("load", function () {
+  loadCurrentlyReading();
+});
 
-      // Handle edit button clicks with event delegation (like your example)
-      document.addEventListener("click", function (e) {
-        console.log("Click detected on element:", e.target);
-        console.log("Element classes:", e.target.className);
+// Handle edit button clicks with event delegation (like your example)
+document.addEventListener("click", function (e) {
+  console.log("Click detected on element:", e.target);
+  console.log("Element classes:", e.target.className);
 
-        if (e.target.classList.contains("edit-btn")) {
-          console.log("Edit button clicked!");
+  if (e.target.classList.contains("edit-btn")) {
+    console.log("Edit button clicked!");
 
-          // Get book data from the button
-          const bookId = e.target.getAttribute("data-id");
-          const bookTitle = e.target.getAttribute("data-title");
-          const bookAuthor = e.target.getAttribute("data-author");
-          const bookGenre = e.target.getAttribute("data-genre");
-          const bookStatus = e.target.getAttribute("data-status");
+    // Get book data from the button
+    const bookId = e.target.getAttribute("data-id");
+    const bookTitle = e.target.getAttribute("data-title");
+    const bookAuthor = e.target.getAttribute("data-author");
+    const bookGenre = e.target.getAttribute("data-genre");
+    const bookStatus = e.target.getAttribute("data-status");
 
-          console.log("Book data:", {
-            bookId,
-            bookTitle,
-            bookAuthor,
-            bookGenre,
-            bookStatus,
-          });
+    console.log("Book data:", {
+      bookId,
+      bookTitle,
+      bookAuthor,
+      bookGenre,
+      bookStatus
+    });
 
-          // Fill the modal form
-          document.getElementById("edit-book-id").value = bookId;
-          document.getElementById("edit-book-title").value = bookTitle;
-          document.getElementById("edit-book-author").value = bookAuthor;
-          document.getElementById("edit-book-genre").value = bookGenre;
-          document.getElementById("edit-book-status").value = bookStatus;
+    // Fill the modal form
+    document.getElementById("edit-book-id").value = bookId;
+    document.getElementById("edit-book-title").value = bookTitle;
+    document.getElementById("edit-book-author").value = bookAuthor;
+    document.getElementById("edit-book-genre").value = bookGenre;
+    document.getElementById("edit-book-status").value = bookStatus;
 
-          console.log("Form filled, attempting to show modal...");
+    console.log("Form filled, attempting to show modal...");
 
-          // Check if bootstrap is available
-          if (typeof bootstrap !== "undefined") {
-            console.log("Bootstrap is available");
-            const modalElement = document.getElementById("editBookModal");
-            console.log("Modal element:", modalElement);
+    // Check if bootstrap is available
+    if (typeof bootstrap !== "undefined") {
+      console.log("Bootstrap is available");
+      const modalElement = document.getElementById("editBookModal");
+      console.log("Modal element:", modalElement);
 
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-            console.log("Modal show() called");
-          } else {
-            console.error("Bootstrap is not available!");
-            alert("Bootstrap not loaded - modal cannot be shown");
-          }
-        }
+      const modal = new bootstrap.Modal(modalElement);
+      modal.show();
+      console.log("Modal show() called");
+    } else {
+      console.error("Bootstrap is not available!");
+      alert("Bootstrap not loaded - modal cannot be shown");
+    }
+  }
 
-        // Handle delete button clicks
-        if (e.target.classList.contains("delete-btn")) {
-          console.log("Delete button clicked!");
+  // Handle delete button clicks
+  if (e.target.classList.contains("delete-btn")) {
+    console.log("Delete button clicked!");
 
-          // Store delete info globally for confirmation
-          window.deleteBookId = e.target.getAttribute("data-id");
-          window.deleteBookTitle = e.target.getAttribute("data-title");
+    // Store delete info globally for confirmation
+    window.deleteBookId = e.target.getAttribute("data-id");
+    window.deleteBookTitle = e.target.getAttribute("data-title");
 
-          // Show book title in confirmation modal
-          document.getElementById("delete-book-title").textContent =
-            window.deleteBookTitle;
+    // Show book title in confirmation modal
+    document.getElementById("delete-book-title").textContent =
+      window.deleteBookTitle;
 
-          // Show the confirmation modal
-          const modal = new bootstrap.Modal(
-            document.getElementById("deleteConfirmationModal")
-          );
-          modal.show();
-        }
-      });
+    // Show the confirmation modal
+    const modal = new bootstrap.Modal(
+      document.getElementById("deleteConfirmationModal")
+    );
+    modal.show();
+  }
+});
 
-      // Confirm delete function
-      function confirmDelete() {
-        const id = window.deleteBookId;
-        const title = window.deleteBookTitle;
+// Confirm delete function
+function confirmDelete() {
+  const id = window.deleteBookId;
+  const title = window.deleteBookTitle;
 
-        fetch(`/api/books/${id}`, {
-          method: "DELETE",
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            showToast(`Book "${title}" deleted successfully`);
+  fetch(`/api/books/${id}`, {
+    method: "DELETE"
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      showToast(`Book "${title}" deleted successfully`);
 
-            // Close the modal
-            const modal = bootstrap.Modal.getInstance(
-              document.getElementById("deleteConfirmationModal")
-            );
-            modal.hide();
+      // Close the modal
+      const modal = bootstrap.Modal.getInstance(
+        document.getElementById("deleteConfirmationModal")
+      );
+      modal.hide();
 
-            // Refresh displays
-            loadCurrentlyReading();
+      // Refresh displays
+      loadCurrentlyReading();
 
-            // Refresh the current tab if it's completed or to-read
-            const activeTab = document.querySelector(
-              ".tab-content:not(.d-none)"
-            );
-            if (activeTab.id === "completed-tab") {
-              loadCompletedBooks();
-            } else if (activeTab.id === "toread-tab") {
-              loadToReadBooks();
-            }
-          })
-          .catch((error) => {
-            showToast("Error deleting book. Please try again.");
-          });
+      // Refresh the current tab if it's completed or to-read
+      const activeTab = document.querySelector(".tab-content:not(.d-none)");
+      if (activeTab.id === "completed-tab") {
+        loadCompletedBooks();
+      } else if (activeTab.id === "toread-tab") {
+        loadToReadBooks();
       }
+    })
+    .catch((error) => {
+      showToast("Error deleting book. Please try again.");
+    });
+}
