@@ -1,46 +1,52 @@
-// JavaScript to handle form submission and book management will go here
-function addBook() {
-  const title = document.getElementById("book-title").value;
-  const author = document.getElementById("book-author").value;
-  const readStatus = document.getElementById("book-status").value;
-  const genre = document.getElementById("book-genre").value;
+  // Minimal logout: clear auth info and redirect to auth page
+      function logout() {
+        localStorage.removeItem('jwtToken');
+        localStorage.removeItem('username');
+        window.location.href = 'auth.html';
+      }     
+      // JavaScript to handle form submission and book management will go here
+      function addBook() {
+        const title = document.getElementById("book-title").value;
+        const author = document.getElementById("book-author").value;
+        const readStatus = document.getElementById("book-status").value;
+        const genre = document.getElementById("book-genre").value;
 
-  fetch("/api/books", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, author, readStatus, genre })
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      showToast(`Book "${title}" added to library`);
-      document.getElementById("add-book-form").reset();
-      loadCurrentlyReading(); // Refresh currently reading display
-    })
-    .catch((error) => {
-      showToast(`Something went wrong. Please try again.`);
-    });
-}
+        fetch("/api/books", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, author, readStatus, genre }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            showToast(`Book "${title}" added to library`);
+            document.getElementById("add-book-form").reset();
+            loadCurrentlyReading(); // Refresh currently reading display
+          })
+          .catch((error) => {
+            showToast(`Something went wrong. Please try again.`);
+          });
+      }
 
-function showToast(message) {
-  document.getElementById("toastMessage").textContent = message;
-  const toast = new bootstrap.Toast(document.getElementById("bookToast"));
-  toast.show();
-}
+      function showToast(message) {
+        document.getElementById("toastMessage").textContent = message;
+        const toast = new bootstrap.Toast(document.getElementById("bookToast"));
+        toast.show();
+      }
 
-// Load currently reading book
-function loadCurrentlyReading() {
-  fetch("/api/books")
-    .then((res) => res.json())
-    .then((books) => {
-      const currentlyReading = books.filter(
-        (book) => book.readStatus === "currently-reading"
-      );
-      const currentReadElement = document.getElementById("current-read");
+      // Load currently reading book
+      function loadCurrentlyReading() {
+        fetch("/api/books")
+          .then((res) => res.json())
+          .then((books) => {
+            const currentlyReading = books.filter(
+              (book) => book.readStatus === "currently-reading"
+            );
+            const currentReadElement = document.getElementById("current-read");
 
-      if (currentlyReading.length > 0) {
-        currentReadElement.innerHTML = currentlyReading
-          .map(
-            (book) => `
+            if (currentlyReading.length > 0) {
+              currentReadElement.innerHTML = currentlyReading
+                .map(
+                  (book) => `
                             <div class="card mb-2">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-start">
