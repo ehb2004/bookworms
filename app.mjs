@@ -369,7 +369,7 @@ function authenticateToken(req, res, next) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
 
-    req.user = user; // Add user info to request
+    req.user = user;
     next();
   });
 }
@@ -590,7 +590,7 @@ app.delete("/api/books/:id", async (req, res) => {
 
 
 
-// Send friend request to username
+//send friend request
 app.post('/api/friends/request/:username', authenticateToken, async (req, res) => {
   try {
     const fromId = new ObjectId(req.user.userId);
@@ -613,7 +613,7 @@ app.post('/api/friends/request/:username', authenticateToken, async (req, res) =
   }
 });
 
-// Incoming friend requests
+//shows incoming friend requests
 app.get('/api/friends/requests', authenticateToken, async (req, res) => {
   try {
     const meId = new ObjectId(req.user.userId);
@@ -631,7 +631,7 @@ app.get('/api/friends/requests', authenticateToken, async (req, res) => {
   }
 });
 
-// Respond to a friend request
+//accept or reject friend request
 app.post('/api/friends/respond', authenticateToken, async (req, res) => {
   try {
     const meId = new ObjectId(req.user.userId);
@@ -653,7 +653,7 @@ app.post('/api/friends/respond', authenticateToken, async (req, res) => {
   }
 });
 
-// Get list of friends
+//get friends list
 app.get('/api/friends/list', authenticateToken, async (req, res) => {
   try {
     const meId = new ObjectId(req.user.userId);
@@ -671,7 +671,7 @@ app.get('/api/friends/list', authenticateToken, async (req, res) => {
   }
 });
 
-// Unfriend someone
+//unfriend
 app.delete('/api/friends/delete/:friendId', authenticateToken, async (req, res) => {
   try {
     const meId = new ObjectId(req.user.userId);
@@ -686,7 +686,7 @@ app.delete('/api/friends/delete/:friendId', authenticateToken, async (req, res) 
   }
 });
 
-// View a friend's profile by username
+//view a friend's profile by username
 app.get('/api/friends/:username', authenticateToken, async (req, res) => {
   try {
     const meId = new ObjectId(req.user.userId);

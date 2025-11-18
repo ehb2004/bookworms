@@ -651,19 +651,15 @@
         }
       }
 
-      // Show Friends tab and load data (used by sidebar Friends link)
+      //show friends tab
       function showFriendsNav() {
-        // Hide all tabs
         document.querySelectorAll(".tab-content").forEach((tab) => {
           tab.classList.add("d-none");
         });
-        // Show friends tab
         document.getElementById("friends-tab").classList.remove("d-none");
-        // Load data
         loadFriendsList();
       }
 
-      // Load completed books
       function loadCompletedBooks() {
         const token = localStorage.getItem('jwtToken');
         fetch("/api/books", { headers: { 'Authorization': `Bearer ${token}` } })
