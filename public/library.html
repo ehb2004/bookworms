@@ -63,6 +63,16 @@
                   <span class="ms-1 d-none d-sm-inline">To Be Read</span>
                 </a>
               </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  class="nav-link align-middle px-0 text-white"
+                  onclick="showFriendsNav()"
+                >
+                  <i class="fs-4 bi-people"></i>
+                  <span class="ms-1 d-none d-sm-inline">Friends</span>
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -160,6 +170,21 @@
               <div class="card-body">
                 <div id="toread-books-list">
                   <!-- To be read books will be loaded here -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Friends Tab -->
+          <div id="friends-tab" class="tab-content d-none">
+            <div class="mb-4">
+              <h2>My Friends</h2>
+              <p>All your friends will be displayed here!</p>
+            </div>
+            <div class="card">
+              <div class="card-body">
+                <div id="friends-list">
+                  <!-- All friends will be loaded here -->
                 </div>
               </div>
             </div>
@@ -313,10 +338,12 @@
         const readStatus = document.getElementById("book-status").value;
         const genre = document.getElementById("book-genre").value;
 
+        const owner = localStorage.getItem('username') || null;
+
         fetch("/api/books", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, author, readStatus, genre }),
+          body: JSON.stringify({ title, author, readStatus, genre, owner }),
         })
           .then((res) => res.json())
           .then((data) => {
@@ -329,6 +356,125 @@
           });
       }
 
+      // Friends
+      async function sendFriendRequest() {
+        const username = document.getElementById('friend-username-input').value.trim();
+        if (!username) return showToast('Enter a username');
+        const token = localStorage.getItem('jwtToken');
+        const res = await fetch(`/api/friends/request/${username}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        showToast(data.message || data.error);
+        if (res.ok) {
+          document.getElementById('friend-username-input').value = '';
+          loadFriendsList();
+        }
+      }
+
+      async function respondFriendRequest(fromUserId, action) {
+        const token = localStorage.getItem('jwtToken');
+        const res = await fetch('/api/friends/respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ fromUserId, action })
+        });
+        const data = await res.json();
+        showToast(data.message || data.error);
+        loadFriendsList();
+      }
+
+      async function loadFriendsList() {
+        const token = localStorage.getItem('jwtToken');
+        const resFriends = await fetch('/api/friends/list', { headers: { 'Authorization': `Bearer ${token}` } });
+        const dataFriends = await resFriends.json();
+        const resRequests = await fetch('/api/friends/requests', { headers: { 'Authorization': `Bearer ${token}` } });
+        const dataRequests = await resRequests.json();
+        const container = document.getElementById('friends-list');
+        
+        let html = '<h5 style="margin-bottom: 10px;">Send Friend Request</h5>';
+        html += '<div style="display: flex; gap: 10px; margin-bottom: 20px;">';
+        html += '<input id="friend-username-input" class="form-control" placeholder="Enter username" style="max-width: 250px;" />';
+        html += '<button class="btn btn-dark" onclick="sendFriendRequest()">Send</button>';
+        html += '</div>';
+        
+        if (dataRequests.requests && dataRequests.requests.length > 0) {
+          html += '<h5 style="margin-top: 20px; margin-bottom: 10px;">Incoming Requests</h5>';
+          html += dataRequests.requests.map(u => `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-radius: 3px;">
+              <span>${u.username}</span>
+              <div style="display: flex; gap: 5px;">
+                <button class="btn btn-sm btn-success" onclick="respondFriendRequest('${u._id}', 'accept')">Accept</button>
+                <button class="btn btn-sm btn-danger" onclick="respondFriendRequest('${u._id}', 'reject')">Reject</button>
+              </div>
+            </div>
+          `).join('');
+        }
+        
+        if (!dataFriends.friends || dataFriends.friends.length === 0) {
+          html += '<h5 style="margin-top: 20px; margin-bottom: 10px;">My Friends</h5>';
+          html += '<p style="color: #999;">No friends yet</p>';
+        } else {
+          html += '<h5 style="margin-top: 20px; margin-bottom: 10px;">My Friends (' + dataFriends.friends.length + ')</h5>';
+          html += dataFriends.friends.map(f => `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-radius: 3px;">
+              <span>${f.username}</span>
+              <div style="display: flex; gap: 5px;">
+                <button class="btn btn-sm btn-primary" onclick="viewFriendProfile('${f.username}')">View</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="unfriend('${f._id}')">Remove</button>
+              </div>
+            </div>
+          `).join('');
+        }
+        
+        container.innerHTML = html;
+      }
+
+      async function unfriend(friendId) {
+        const token = localStorage.getItem('jwtToken');
+        const res = await fetch(`/api/friends/delete/${friendId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json();
+        showToast(data.message || data.error);
+        loadFriendsList();
+      }
+
+      async function viewFriendProfile(username) {
+        const token = localStorage.getItem('jwtToken');
+        const res = await fetch(`/api/friends/${encodeURIComponent(username)}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json();
+        const books = data.books || {};
+        const friendsList = document.getElementById('friends-list');
+        
+        friendsList.innerHTML = `
+          <div style="margin-bottom: 15px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadFriendsList()">← Back to Friends</button>
+          </div>
+          <h5 style="margin-bottom: 15px; color: #4f5743;">${data.user.username}'s Books</h5>
+          <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+            <h6 style="margin-bottom: 10px; color: #6B7460;">Currently Reading</h6>
+            ${renderBookList(books['currently-reading'])}
+          </div>
+          <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+            <h6 style="margin-bottom: 10px; color: #6B7460;">To Be Read</h6>
+            ${renderBookList(books['to-read'])}
+          </div>
+          <div style="padding: 12px; background: #f9f9f9; border-radius: 4px;">
+            <h6 style="margin-bottom: 10px; color: #6B7460;">Completed</h6>
+            ${renderBookList(books['completed'])}
+          </div>
+        `;
+      }
+
+      function backToFriendsPanel() {
+        loadFriendsList();
+      }
+
+      function renderBookList(list) {
+        if (!list || list.length === 0) return '<p style="margin-left: 15px; color: #999;">None</p>';
+        return '<ul style="margin-left: 20px;">' + list.map(b => `<li>${b.title} by ${b.author}</li>`).join('') + '</ul>';
+      }
+
       function showToast(message) {
         document.getElementById("toastMessage").textContent = message;
         const toast = new bootstrap.Toast(document.getElementById("bookToast"));
@@ -337,7 +483,8 @@
 
       // Load currently reading book
       function loadCurrentlyReading() {
-        fetch("/api/books")
+        const token = localStorage.getItem('jwtToken');
+        fetch("/api/books", { headers: { 'Authorization': `Bearer ${token}` } })
           .then((res) => res.json())
           .then((books) => {
             const currentlyReading = books.filter(
@@ -504,9 +651,22 @@
         }
       }
 
+      // Show Friends tab and load data (used by sidebar Friends link)
+      function showFriendsNav() {
+        // Hide all tabs
+        document.querySelectorAll(".tab-content").forEach((tab) => {
+          tab.classList.add("d-none");
+        });
+        // Show friends tab
+        document.getElementById("friends-tab").classList.remove("d-none");
+        // Load data
+        loadFriendsList();
+      }
+
       // Load completed books
       function loadCompletedBooks() {
-        fetch("/api/books")
+        const token = localStorage.getItem('jwtToken');
+        fetch("/api/books", { headers: { 'Authorization': `Bearer ${token}` } })
           .then((res) => res.json())
           .then((books) => {
             const completedBooks = books.filter(
@@ -558,7 +718,8 @@
 
       // Load to-read books
       function loadToReadBooks() {
-        fetch("/api/books")
+        const token = localStorage.getItem('jwtToken');
+        fetch("/api/books", { headers: { 'Authorization': `Bearer ${token}` } })
           .then((res) => res.json())
           .then((books) => {
             const toReadBooks = books.filter(
