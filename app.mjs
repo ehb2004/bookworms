@@ -292,3 +292,181 @@ app.delete("/api/books/:id", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// send friend request
+app.post('/api/friends/request/:username', authenticateToken, async (req, res) => {
+  try {
+    const fromId = new ObjectId(req.user.userId);
+    const toUsername = req.params.username;
+
+    const toUser = await db.collection('users').findOne({ username: toUsername });
+    if (!toUser) return res.status(404).json({ error: 'Target user not found' });
+
+    if (toUser._id.equals(fromId)) {
+      return res.status(400).json({ error: 'Cannot friend yourself' });
+    }
+
+    if (toUser.friends && toUser.friends.some(id => id.equals(fromId))) {
+      return res.status(400).json({ error: 'Already friends' });
+    }
+
+    if (toUser.incomingFriendRequests && toUser.incomingFriendRequests.some(id => id.equals(fromId))) {
+      return res.status(400).json({ error: 'Friend request already sent' });
+    }
+
+    await db.collection('users').updateOne(
+      { _id: toUser._id },
+      { $addToSet: { incomingFriendRequests: fromId } }
+    );
+
+    res.json({ message: 'Friend request sent' });
+  } catch (error) {
+    console.error('Error sending friend request:', error);
+    res.status(500).json({ error: 'Failed to send friend request' });
+  }
+});
+
+// shows incoming friend requests
+app.get('/api/friends/requests', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const me = await db.collection('users').findOne({ _id: meId });
+    const incoming = me.incomingFriendRequests || [];
+
+    const requestUsers = await db.collection('users')
+      .find({ _id: { $in: incoming } })
+      .project({ password: 0 })
+      .toArray();
+
+    res.json({ requests: requestUsers });
+  } catch (error) {
+    console.error('Error fetching friend requests:', error);
+    res.status(500).json({ error: 'Failed to fetch friend requests' });
+  }
+});
+
+// accept or reject friend request
+app.post('/api/friends/respond', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const { fromUserId, action } = req.body;
+    if (!fromUserId || !action) {
+      return res.status(400).json({ error: 'Missing parameters' });
+    }
+
+    const fromId = new ObjectId(fromUserId);
+
+    if (action === 'accept') {
+      await db.collection('users').updateOne(
+        { _id: meId },
+        {
+          $addToSet: { friends: fromId },
+          $pull: { incomingFriendRequests: fromId }
+        }
+      );
+      await db.collection('users').updateOne(
+        { _id: fromId },
+        { $addToSet: { friends: meId } }
+      );
+      res.json({ message: 'Friend request accepted' });
+    } else {
+      await db.collection('users').updateOne(
+        { _id: meId },
+        { $pull: { incomingFriendRequests: fromId } }
+      );
+      res.json({ message: 'Friend request rejected' });
+    }
+  } catch (error) {
+    console.error('Error responding to friend request:', error);
+    res.status(500).json({ error: 'Failed to respond to friend request' });
+  }
+});
+
+// get friends list
+app.get('/api/friends/list', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const me = await db.collection('users').findOne({ _id: meId });
+    const friends = me.friends || [];
+
+    const friendUsers = await db.collection('users')
+      .find({ _id: { $in: friends } })
+      .project({ password: 0, incomingFriendRequests: 0 })
+      .toArray();
+
+    res.json({ friends: friendUsers });
+  } catch (error) {
+    console.error('Error fetching friends list:', error);
+    res.status(500).json({ error: 'Failed to fetch friends list' });
+  }
+});
+
+// unfriend
+app.delete('/api/friends/delete/:friendId', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const friendId = new ObjectId(req.params.friendId);
+
+    await db.collection('users').updateOne(
+      { _id: meId },
+      { $pull: { friends: friendId } }
+    );
+    await db.collection('users').updateOne(
+      { _id: friendId },
+      { $pull: { friends: meId } }
+    );
+
+    res.json({ message: 'Unfriended successfully' });
+  } catch (error) {
+    console.error('Error unfriending:', error);
+    res.status(500).json({ error: 'Failed to unfriend' });
+  }
+});
+
+// view a friend's profile by username
+app.get('/api/friends/:username', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const username = req.params.username;
+
+    const target = await db.collection('users').findOne({ username });
+    if (!target) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const me = await db.collection('users').findOne({ _id: meId });
+    const isFriend =
+      me.friends && me.friends.some((id) => id.equals(target._id));
+
+    if (!isFriend) {
+      return res
+        .status(403)
+        .json({ error: 'You are not friends with this user' });
+    }
+
+    // 🔹 adjust this query if your books schema uses a different field
+    const userBooks = await db
+      .collection('books')
+      .find({ userId: target._id })
+      .toArray();
+
+    const booksByStatus = {
+      'currently-reading': userBooks.filter(
+        (b) => b.readStatus === 'currently-reading'
+      ),
+      'to-read': userBooks.filter((b) => b.readStatus === 'to-read'),
+      completed: userBooks.filter((b) => b.readStatus === 'completed')
+    };
+
+    res.json({
+      user: {
+        _id: target._id,
+        username: target.username
+      },
+      books: booksByStatus
+    });
+  } catch (error) {
+    console.error('Error fetching friend profile:', error);
+    res.status(500).json({ error: 'Failed to fetch friend profile' });
+  }
+});
