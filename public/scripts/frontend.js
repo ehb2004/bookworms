@@ -11,21 +11,32 @@
         const readStatus = document.getElementById("book-status").value;
         const genre = document.getElementById("book-genre").value;
 
+        const token = localStorage.getItem("jwtToken"); // 👈 retrieve token
+
         fetch("/api/books", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Authorization": `Bearer ${token}`, // 👈 send token
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ title, author, readStatus, genre }),
         })
           .then((res) => res.json())
           .then((data) => {
+            if (data.error) {
+              showToast(`❌ Error: ${data.error}`);
+              return;
+            }
             showToast(`Book "${title}" added to library`);
             document.getElementById("add-book-form").reset();
             loadCurrentlyReading(); // Refresh currently reading display
           })
           .catch((error) => {
             showToast(`Something went wrong. Please try again.`);
+            console.error("Add book error:", error);
           });
       }
+
 
       function showToast(message) {
         document.getElementById("toastMessage").textContent = message;
@@ -35,7 +46,9 @@
 
       // Load currently reading book
       function loadCurrentlyReading() {
-        fetch("/api/books")
+        const token = localStorage.getItem("jwtToken"); // 👈 get token saved at login
+
+        fetch("/api/books", {headers: {"Authorization": `Bearer ${token}`, "Content-Type": "application/json"}})
           .then((res) => res.json())
           .then((books) => {
             const currentlyReading = books.filter(
@@ -204,7 +217,13 @@ function showTab(tabName) {
 
 // Load completed books
 function loadCompletedBooks() {
-  fetch("/api/books")
+  const token = localStorage.getItem("jwtToken"); // 👈 get token saved at login
+  fetch("/api/books", {
+    headers: {
+      "Authorization": `Bearer ${token}`, // 👈 send token
+      "Content-Type": "application/json"
+    }
+  })
     .then((res) => res.json())
     .then((books) => {
       const completedBooks = books.filter(
@@ -256,9 +275,17 @@ function loadCompletedBooks() {
 
 // Load to-read books
 function loadToReadBooks() {
-  fetch("/api/books")
+  const token = localStorage.getItem("jwtToken"); // 👈 get token saved at login
+  fetch("/api/books", {
+    headers: {
+      "Authorization": `Bearer ${token}`, // 👈 send token
+      "Content-Type": "application/json"
+    }
+  })
     .then((res) => res.json())
     .then((books) => {
+      console.log("Books from API:", books.map(b => b.readStatus));
+      console.log("Statuses:", books.map(b => b.readStatus));
       const toReadBooks = books.filter((book) => book.readStatus === "to-read");
       const container = document.getElementById("toread-books-list");
 
@@ -376,15 +403,25 @@ document.addEventListener("click", function (e) {
   }
 });
 
-// Confirm delete function
 function confirmDelete() {
   const id = window.deleteBookId;
   const title = window.deleteBookTitle;
+  const token = localStorage.getItem("jwtToken");
 
   fetch(`/api/books/${id}`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json"
+    }
   })
-    .then((res) => res.json())
+    .then(async (res) => {
+      const data = await res.json().catch(() => ({})); // 👈 avoid JSON parse errors
+      if (!res.ok) {
+        throw new Error(data.error || "Delete failed");
+      }
+      return data;
+    })
     .then((data) => {
       showToast(`Book "${title}" deleted successfully`);
 
@@ -394,18 +431,13 @@ function confirmDelete() {
       );
       modal.hide();
 
-      // Refresh displays
+      // Refresh all lists
       loadCurrentlyReading();
-
-      // Refresh the current tab if it's completed or to-read
-      const activeTab = document.querySelector(".tab-content:not(.d-none)");
-      if (activeTab.id === "completed-tab") {
-        loadCompletedBooks();
-      } else if (activeTab.id === "toread-tab") {
-        loadToReadBooks();
-      }
+      loadToReadBooks();
+      loadCompletedBooks();
     })
     .catch((error) => {
+      console.error("Delete error:", error);
       showToast("Error deleting book. Please try again.");
     });
 }

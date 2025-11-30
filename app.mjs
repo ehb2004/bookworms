@@ -187,8 +187,21 @@ all endpoints were derived from https://github.com/barrycumbie/stunning-octo-for
 endpoints have been modified to fit this project.
 */
 
-// Creating a book entry - Tested and working.
-app.post("/api/books", async (req, res) => {
+// Middleware to authenticate and attach user info from JWT
+// function authenticateToken(req, res, next) {
+//   const authHeader = req.headers["authorization"];
+//   const token = authHeader && authHeader.split(" ")[1];
+//   if (!token) return res.sendStatus(401);
+
+//   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+//     if (err) return res.sendStatus(403);
+//     req.user = user; // user contains { id, email, ... }
+//     next();
+//   });
+// }
+
+// Creating a book entry - now tied to the logged-in user
+app.post("/api/books", authenticateToken, async (req, res) => {
   try {
     const { title, author, genre, readStatus } = req.body;
 
@@ -204,7 +217,9 @@ app.post("/api/books", async (req, res) => {
       genre,
       readStatus,
       createdAt: new Date(),
+      userId: req.user.userId, // 👈 attach userId from JWT
     };
+
     const result = await db.collection("books").insertOne(book);
 
     console.log(`Congrats! Added: ${title}`);
@@ -219,21 +234,29 @@ app.post("/api/books", async (req, res) => {
   }
 });
 
-// Reading library entries - Tested and working.
-app.get("/api/books", async (req, res) => {
+
+// Reading library entries - now scoped to the logged-in user
+app.get("/api/books", authenticateToken, async (req, res) => {
   try {
-    const books = await db.collection("books").find({}).toArray();
-    console.log("Viewing books");
+    // Only fetch books belonging to the logged-in user
+    const books = await db
+      .collection("books")
+      .find({ userId: req.user.userId })   // 👈 use userId, not id
+      .toArray();
+
+    console.log(`Viewing books for user ${req.user.userId}`);
     res.json(books);
   } catch (error) {
     res
       .status(500)
-      .json({ error: "Failed to fetch those books man..." + error.message });
+      .json({ error: "Failed to fetch books: " + error.message });
   }
 });
 
-// Update a book entry - Tested and working.
-app.put("/api/books/:id", async (req, res) => {
+
+
+// Update a book entry - only if it belongs to the logged-in user
+app.put("/api/books/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, author, genre, readStatus } = req.body;
@@ -241,22 +264,26 @@ app.put("/api/books/:id", async (req, res) => {
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid book ID" });
     }
+
     const updatedBook = {
       title,
       author,
       genre,
       readStatus,
+      updatedAt: new Date(),
     };
 
-    const result = await db
-      .collection("books")
-      .updateOne({ _id: new ObjectId(id) }, { $set: updatedBook });
+    // 👇 Ownership check: only update if this book belongs to the current user
+    const result = await db.collection("books").updateOne(
+      { _id: new ObjectId(id), userId: req.user.userId }, // filter by both id and userId
+      { $set: updatedBook }
+    );
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "Book not found" });
+      return res.status(404).json({ error: "Book not found or not yours" });
     }
 
-    console.log(`Updated book with ID: ${id}`);
+    console.log(`Updated book with ID: ${id} for user ${req.user.userId}`);
     res.json({ message: "Book updated successfully" });
   } catch (error) {
     console.error("Error updating book:", error);
@@ -264,8 +291,9 @@ app.put("/api/books/:id", async (req, res) => {
   }
 });
 
-// Delete a book entry - Tested and working.
-app.delete("/api/books/:id", async (req, res) => {
+
+// Delete a book entry - only if it belongs to the logged-in user
+app.delete("/api/books/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -273,21 +301,24 @@ app.delete("/api/books/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid book ID" });
     }
 
-    const result = await db
-      .collection("books")
-      .deleteOne({ _id: new ObjectId(id) });
+    // Ownership check: only delete if this book belongs to the current user
+    const result = await db.collection("books").deleteOne({
+      _id: new ObjectId(id),
+      userId: req.user.userId,   // 👈 FIXED: use userId from JWT payload
+    });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "Book not found" });
+      return res.status(404).json({ error: "Book not found or not yours" });
     }
 
-    console.log(`Deleted book with ID: ${id}`);
+    console.log(`Deleted book with ID: ${id} for user ${req.user.userId}`);
     res.json({ message: "Book deleted successfully" });
   } catch (error) {
     console.error("Error deleting book:", error);
     res.status(500).json({ error: "Failed to delete book" });
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
