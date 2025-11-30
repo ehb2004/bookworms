@@ -11,7 +11,9 @@ color palette:
 - brown: #483c32
 
 */
-.container-fluid {
+.container-fluid,
+.container,
+.auth-container {
   font-family: Grenze, serif;
 }
 body {
@@ -27,12 +29,6 @@ body {
   color: black;
   text-align: center;
 }
-.card {
-        background-color: #eee9e4;
-        padding: 10px;
-    border-radius: 8px;
-    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.1);
-    }
 /* Sidebar customizations */
 .custom-sidebar {
   background-color: #4f5743;
@@ -67,4 +63,11 @@ body {
 .custom-sidebar .nav-link:hover {
   background-color: #dcd1c3 !important;
   border-radius: 5px !important;
+}
+.card-header {
+  background-color: #6b7460 !important;
+  color: white !important;
+}
+.btn-dark {
+  border-radius: 8px;
 }

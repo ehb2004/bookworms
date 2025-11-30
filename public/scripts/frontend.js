@@ -210,6 +210,8 @@ function showTab(tabName) {
     loadCompletedBooks();
   } else if (tabName === "toread") {
     loadToReadBooks();
+  } else if (tabName === "friends") {
+    loadFriendsList();   
   }
 }
 
@@ -440,4 +442,161 @@ function confirmDelete() {
     });
 }
 
+// Friends functionality
+async function sendFriendRequest() {
+  const username = document
+    .getElementById("friend-username-input")
+    .value.trim();
+  if (!username) return showToast("Enter a username");
+  const token = localStorage.getItem("jwtToken");
+  const res = await fetch(`/api/friends/request/${username}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  showToast(data.message || data.error);
+  if (res.ok) {
+    document.getElementById("friend-username-input").value = "";
+    loadFriendsList();
+  }
+}
 
+async function respondFriendRequest(fromUserId, action) {
+  const token = localStorage.getItem("jwtToken");
+  const res = await fetch("/api/friends/respond", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ fromUserId, action })
+  });
+  const data = await res.json();
+  showToast(data.message || data.error);
+  loadFriendsList();
+}
+
+async function loadFriendsList() {
+  const token = localStorage.getItem("jwtToken");
+  const resFriends = await fetch("/api/friends/list", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const dataFriends = await resFriends.json();
+  const resRequests = await fetch("/api/friends/requests", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const dataRequests = await resRequests.json();
+  const container = document.getElementById("friends-list");
+
+  let html = '<h5 style="margin-bottom: 10px;">Send Friend Request</h5>';
+  html +=
+    '<div style="display: flex; gap: 10px; margin-bottom: 20px;">';
+  html +=
+    '<input id="friend-username-input" class="form-control" placeholder="Enter username" style="max-width: 250px;" />';
+  html +=
+    '<button class="btn btn-dark" onclick="sendFriendRequest()">Send</button>';
+  html += "</div>";
+
+  if (dataRequests.requests && dataRequests.requests.length > 0) {
+    html +=
+      '<h5 style="margin-top: 20px; margin-bottom: 10px;">Incoming Requests</h5>';
+    html += dataRequests.requests
+      .map(
+        (u) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-radius: 3px;">
+              <span>${u.username}</span>
+              <div style="display: flex; gap: 5px;">
+                <button class="btn btn-sm btn-success" onclick="respondFriendRequest('${u._id}', 'accept')">Accept</button>
+                <button class="btn btn-sm btn-danger" onclick="respondFriendRequest('${u._id}', 'reject')">Reject</button>
+              </div>
+            </div>
+          `
+      )
+      .join("");
+  }
+
+  if (!dataFriends.friends || dataFriends.friends.length === 0) {
+    html +=
+      '<h5 style="margin-top: 20px; margin-bottom: 10px;">My Friends</h5>';
+    html += '<p style="color: #999;">No friends yet</p>';
+  } else {
+    html +=
+      '<h5 style="margin-top: 20px; margin-bottom: 10px;">My Friends (' +
+      dataFriends.friends.length +
+      ")</h5>";
+    html += dataFriends.friends
+      .map(
+        (f) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-radius: 3px;">
+              <span>${f.username}</span>
+              <div style="display: flex; gap: 5px;">
+                <button class="btn btn-sm btn-primary" onclick="viewFriendProfile('${f.username}')">View</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="unfriend('${f._id}')">Remove</button>
+              </div>
+            </div>
+          `
+      )
+      .join("");
+  }
+
+  container.innerHTML = html;
+}
+
+async function unfriend(friendId) {
+  const token = localStorage.getItem("jwtToken");
+  const res = await fetch(`/api/friends/delete/${friendId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  showToast(data.message || data.error);
+  loadFriendsList();
+}
+
+async function viewFriendProfile(username) {
+  const token = localStorage.getItem("jwtToken");
+  const res = await fetch(
+    `/api/friends/${encodeURIComponent(username)}`,
+    {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  );
+  const data = await res.json();
+  const books = data.books || {};
+  const friendsList = document.getElementById("friends-list");
+
+  friendsList.innerHTML = `
+          <div style="margin-bottom: 15px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadFriendsList()">← Back to Friends</button>
+          </div>
+          <h5 style="margin-bottom: 15px; color: #4f5743;">${data.user.username}'s Books</h5>
+          <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+            <h6 style="margin-bottom: 10px; color: #6B7460;">Currently Reading</h6>
+            ${renderBookList(books['currently-reading'])}
+          </div>
+          <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+            <h6 style="margin-bottom: 10px; color: #6B7460;">To Be Read</h6>
+            ${renderBookList(books['to-read'])}
+          </div>
+          <div style="padding: 12px; background: #f9f9f9; border-radius: 4px;">
+            <h6 style="margin-bottom: 10px; color: #6B7460;">Completed</h6>
+            ${renderBookList(books['completed'])}
+          </div>
+        `;
+}
+
+function backToFriendsPanel() {
+  loadFriendsList();
+}
+
+function renderBookList(list) {
+  if (!list || list.length === 0)
+    return '<p style="margin-left: 15px; color: #999;">None</p>';
+  return (
+    '<ul style="margin-left: 20px;">' +
+    list
+      .map((b) => `<li>${b.title} by ${b.author}</li>`)
+      .join("") +
+    "</ul>"
+  );
+}
