@@ -203,6 +203,7 @@ endpoints have been modified to fit this project.
 // Creating a book entry - now tied to the logged-in user
 app.post("/api/books", authenticateToken, async (req, res) => {
   try {
+    // Only accept these fields from the client; ignore any client-supplied timestamps
     const { title, author, genre, readStatus } = req.body;
 
     if (!title || !author || !genre || readStatus === undefined) {
@@ -219,6 +220,14 @@ app.post("/api/books", authenticateToken, async (req, res) => {
       createdAt: new Date(),
       userId: req.user.userId, // 👈 attach userId from JWT
     };
+
+    // Server-side timestamps: authoritative
+    if (readStatus === 'currently-reading') {
+      book.startedAt = new Date();
+    }
+    if (readStatus === 'completed') {
+      book.completedAt = new Date();
+    }
 
     const result = await db.collection("books").insertOne(book);
 
@@ -265,6 +274,10 @@ app.put("/api/books/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Invalid book ID" });
     }
 
+    // Read existing book to check previous timestamps/status
+    const existing = await db.collection('books').findOne({ _id: new ObjectId(id), userId: req.user.userId });
+    if (!existing) return res.status(404).json({ error: 'Book not found or not yours' });
+
     const updatedBook = {
       title,
       author,
@@ -272,6 +285,17 @@ app.put("/api/books/:id", authenticateToken, async (req, res) => {
       readStatus,
       updatedAt: new Date(),
     };
+
+    // Server-side enforcement of timestamps based on status transitions
+    const prevStatus = existing.readStatus;
+    // If transitioning into currently-reading and no startedAt exists, set it
+    if (prevStatus !== 'currently-reading' && readStatus === 'currently-reading' && !existing.startedAt) {
+      updatedBook.startedAt = new Date();
+    }
+    // If transitioning into completed and no completedAt exists, set it
+    if (prevStatus !== 'completed' && readStatus === 'completed' && !existing.completedAt) {
+      updatedBook.completedAt = new Date();
+    }
 
     // 👇 Ownership check: only update if this book belongs to the current user
     const result = await db.collection("books").updateOne(
@@ -283,8 +307,10 @@ app.put("/api/books/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Book not found or not yours" });
     }
 
+    // Return the updated book to the client
+    const updated = await db.collection('books').findOne({ _id: new ObjectId(id) });
     console.log(`Updated book with ID: ${id} for user ${req.user.userId}`);
-    res.json({ message: "Book updated successfully" });
+    res.json({ message: "Book updated successfully", book: updated });
   } catch (error) {
     console.error("Error updating book:", error);
     res.status(500).json({ error: "Failed to update book" });
