@@ -568,7 +568,7 @@ async function loadFriendsList() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-radius: 3px;">
               <span>${f.username}</span>
               <div style="display: flex; gap: 5px;">
-                <button class="btn btn-sm btn-primary" onclick="viewFriendProfile('${f.username}')">View</button>
+                <button class="btn btn-sm btn-primary" onclick="viewFriendProfile('${f._id}')">View</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="unfriend('${f._id}')">Remove</button>
               </div>
             </div>
@@ -602,25 +602,55 @@ async function viewFriendProfile(username) {
   const data = await res.json();
   const books = data.books || {};
   const friendsList = document.getElementById("friends-list");
+  // (debug logging removed)
+
+  // Normalize `books` into an object with keys we expect.
+  // The API may return either a grouped object (books['completed']) or a flat array.
+  const normalizedBooks = { 'currently-reading': [], 'to-read': [], 'completed': [] };
+
+  if (Array.isArray(books)) {
+    books.forEach((b) => {
+      const s = b.readStatus || 'to-read';
+      if (!normalizedBooks[s]) normalizedBooks[s] = [];
+      normalizedBooks[s].push(b);
+    });
+  } else if (books && typeof books === 'object') {
+    // If the API already groups by status, copy arrays where present
+    ['currently-reading', 'to-read', 'completed'].forEach((k) => {
+      if (Array.isArray(books[k])) normalizedBooks[k] = books[k];
+    });
+
+    // Some APIs might use different keys (e.g. "currentlyReading", "toRead", "completed")
+    if (normalizedBooks['currently-reading'].length === 0 && Array.isArray(books.currentlyReading)) normalizedBooks['currently-reading'] = books.currentlyReading;
+    if (normalizedBooks['to-read'].length === 0 && Array.isArray(books.toRead)) normalizedBooks['to-read'] = books.toRead;
+    if (normalizedBooks['completed'].length === 0 && Array.isArray(books.completed)) normalizedBooks['completed'] = books.completed;
+  }
+
+  // Optional: provide a small summary for debugging so you can see counts in the UI
+  const debugSummary = `<!--books-summary: currently=${normalizedBooks['currently-reading'].length} toread=${normalizedBooks['to-read'].length} completed=${normalizedBooks['completed'].length}-->`;
 
   friendsList.innerHTML = `
           <div style="margin-bottom: 15px;">
             <button class="btn btn-secondary btn-sm" onclick="loadFriendsList()">← Back to Friends</button>
           </div>
           <h5 style="margin-bottom: 15px; color: #4f5743;">${data.user.username}'s Books</h5>
+          <div style="margin-bottom: 12px;"><small style="color: #888;">Showing books from the past 30 days only</small></div>
+          ${debugSummary}
           <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
             <h6 style="margin-bottom: 10px; color: #6B7460;">Currently Reading</h6>
-            ${renderBookList(books['currently-reading'])}
+            ${renderBookList(normalizedBooks['currently-reading'])}
           </div>
           <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
             <h6 style="margin-bottom: 10px; color: #6B7460;">To Be Read</h6>
-            ${renderBookList(books['to-read'])}
+            ${renderBookList(normalizedBooks['to-read'])}
           </div>
           <div style="padding: 12px; background: #f9f9f9; border-radius: 4px;">
             <h6 style="margin-bottom: 10px; color: #6B7460;">Completed</h6>
-            ${renderBookList(books['completed'])}
+            ${renderBookList(normalizedBooks['completed'])}
           </div>
         `;
+
+  // debug panel removed
 }
 
 function backToFriendsPanel() {
@@ -628,12 +658,72 @@ function backToFriendsPanel() {
 }
 
 function renderBookList(list) {
+  // Show only books with a relevant timestamp within the past 30 days
+  const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
+  const now = Date.now();
+
   if (!list || list.length === 0)
     return '<p style="margin-left: 15px; color: #999;">None</p>';
+
+  // Helper: get any sensible date from a book object
+  function getRelevantTimestamp(b) {
+    // prefer completedAt, then startedAt, then createdAt, then any other common fields
+    const candidates = [b.completedAt, b.startedAt, b.createdAt, b.addedAt, b.date, b.created_at];
+    for (const c of candidates) {
+      if (c === undefined || c === null) continue;
+
+      // If value is a MongoDB Extended JSON date object like { "$date": "..." }
+      if (typeof c === 'object') {
+        // handle { "$date": "2025-..." } or { "$date": { "$numberLong": "..." }}
+        if (c.$date) {
+          const inner = c.$date;
+          if (typeof inner === 'string' || typeof inner === 'number') {
+            const d = new Date(inner);
+            if (!isNaN(d)) return d.getTime();
+          }
+          if (typeof inner === 'object' && inner.$numberLong) {
+            const d = new Date(Number(inner.$numberLong));
+            if (!isNaN(d)) return d.getTime();
+          }
+        }
+
+        // Some drivers may return { "$numberLong": "<ms>" } directly
+        if (c.$numberLong) {
+          const d = new Date(Number(c.$numberLong));
+          if (!isNaN(d)) return d.getTime();
+        }
+
+        // If object has ISO string in a property (rare), try to stringify
+        try {
+          const maybe = JSON.stringify(c);
+          const d = new Date(maybe);
+          if (!isNaN(d)) return d.getTime();
+        } catch (e) {
+          // ignore
+        }
+        continue;
+      }
+
+      // If it's a plain string or number, try to parse
+      const d = new Date(c);
+      if (!isNaN(d)) return d.getTime();
+    }
+    return null;
+  }
+
+  const recent = list.filter((b) => {
+    const ts = getRelevantTimestamp(b);
+    if (!ts) return false;
+    return now - ts <= THIRTY_DAYS_MS;
+  });
+
+  if (!recent || recent.length === 0)
+    return '<p style="margin-left: 15px; color: #999;">None in the past 30 days</p>';
+
   return (
     '<ul style="margin-left: 20px;">' +
-    list
-      .map((b) => `<li>${b.title} by ${b.author}</li>`)
+    recent
+      .map((b) => `<li>${b.title} by ${b.author || 'Unknown'}</li>`)
       .join("") +
     "</ul>"
   );
