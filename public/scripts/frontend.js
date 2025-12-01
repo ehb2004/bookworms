@@ -13,13 +13,22 @@
 
         const token = localStorage.getItem("jwtToken"); // 👈 retrieve token
 
+        // Build payload and add timestamps for started/completed when appropriate
+        const payload = { title, author, readStatus, genre };
+        if (readStatus === "currently-reading") {
+          payload.startedAt = new Date().toISOString();
+        }
+        if (readStatus === "completed") {
+          payload.completedAt = new Date().toISOString();
+        }
+
         fetch("/api/books", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`, // 👈 send token
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ title, author, readStatus, genre }),
+          body: JSON.stringify(payload),
         })
           .then((res) => res.json())
           .then((data) => {
@@ -84,7 +93,9 @@
                                                     data-genre="${book.genre}" 
                                                     data-status="${
                                                       book.readStatus
-                                                    }">
+                                                    }"
+                                                    data-started="${book.startedAt || ''}"
+                                                    data-completed="${book.completedAt || ''}">
                                                 Edit
                                             </button>
                                             <button class="btn btn-sm btn-danger delete-btn" 
@@ -111,7 +122,7 @@
 }
 
 // Edit book function - opens modal with book data
-function editBook(id, title, author, genre, readStatus) {
+function editBook(id, title, author, genre, readStatus, started, completed) {
   console.log("editBook called with:", {
     id,
     title,
@@ -126,6 +137,11 @@ function editBook(id, title, author, genre, readStatus) {
   document.getElementById("edit-book-author").value = author;
   document.getElementById("edit-book-genre").value = genre;
   document.getElementById("edit-book-status").value = readStatus;
+  // also set hidden timestamp fields (if function called with them)
+  const startedInput = document.getElementById("edit-book-started");
+  const completedInput = document.getElementById("edit-book-completed");
+  if (startedInput) startedInput.value = started || "";
+  if (completedInput) completedInput.value = completed || "";
 
   // Show the modal
   const modalElement = document.getElementById("editBookModal");
@@ -147,11 +163,25 @@ function updateBook() {
   const author = document.getElementById("edit-book-author").value;
   const genre = document.getElementById("edit-book-genre").value;
   const readStatus = document.getElementById("edit-book-status").value;
+  // Build payload and include timestamps if appropriate
+  const payload = { title, author, genre, readStatus };
+  const existingStarted = document.getElementById("edit-book-started")?.value;
+  const existingCompleted = document.getElementById("edit-book-completed")?.value;
 
+  // If user marks completed now and there is no completed timestamp, set it
+  if (readStatus === "completed" && !existingCompleted) {
+    payload.completedAt = new Date().toISOString();
+  }
+  // If user marks currently-reading and there's no started timestamp, set it
+  if (readStatus === "currently-reading" && !existingStarted) {
+    payload.startedAt = new Date().toISOString();
+  }
+
+  const token = localStorage.getItem("jwtToken");
   fetch(`/api/books/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, author, genre, readStatus })
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
   })
     .then((res) => res.json())
     .then((data) => {
@@ -168,13 +198,14 @@ function updateBook() {
 
       // Refresh the current tab if it's completed or to-read
       const activeTab = document.querySelector(".tab-content:not(.d-none)");
-      if (activeTab.id === "completed-tab") {
+      if (activeTab && activeTab.id === "completed-tab") {
         loadCompletedBooks();
-      } else if (activeTab.id === "toread-tab") {
+      } else if (activeTab && activeTab.id === "toread-tab") {
         loadToReadBooks();
       }
     })
     .catch((error) => {
+      console.error("Update book error:", error);
       showToast("Error updating book. Please try again.");
     });
 }
@@ -212,6 +243,8 @@ function showTab(tabName) {
     loadToReadBooks();
   } else if (tabName === "friends") {
     loadFriendsList();   
+  } else if (tabName === "stats") {
+    loadStats();
   }
 }
 
@@ -236,35 +269,31 @@ function loadCompletedBooks() {
           '<p class="text-muted">No completed books yet.</p>';
       } else {
         container.innerHTML = completedBooks
-          .map(
-            (book) =>
-              `<div class="card mb-2">
-                                <div class="card-body">
-                                    <h6 class="card-title">${book.title}</h6>
-                                    <p class="card-text">by ${book.author}</p>
-                                    <small class="text-muted">Genre: ${
-                                      book.genre || "Not specified"
-                                    }</small>
-                                    <div class="mt-2">
-                                        <button class="btn btn-sm btn-warning edit-btn me-2" 
-                                                data-id="${book._id}" 
-                                                data-title="${book.title}" 
-                                                data-author="${book.author}" 
-                                                data-genre="${book.genre}" 
-                                                data-status="${
-                                                  book.readStatus
-                                                }">
-                                            Edit
-                                        </button>
-                                        <button class="btn btn-sm btn-danger delete-btn" 
-                                                data-id="${book._id}" 
-                                                data-title="${book.title}">
-                                            Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>`
-          )
+          .map((book) => `
+            <div class="card mb-2">
+              <div class="card-body">
+                <h6 class="card-title">${book.title}</h6>
+                <p class="card-text">by ${book.author}</p>
+                <small class="text-muted">Genre: ${book.genre || "Not specified"}</small>
+                <div class="mt-2">
+                  <button class="btn btn-sm btn-warning edit-btn me-2"
+                          data-id="${book._id}"
+                          data-title="${book.title}"
+                          data-author="${book.author}"
+                          data-genre="${book.genre}"
+                          data-status="${book.readStatus}"
+                          data-started="${book.startedAt || ''}"
+                          data-completed="${book.completedAt || ''}">
+                    Edit
+                  </button>
+                  <button class="btn btn-sm btn-danger delete-btn"
+                          data-id="${book._id}"
+                          data-title="${book.title}">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>`)
           .join("");
       }
     })
@@ -311,7 +340,9 @@ function loadToReadBooks() {
                                                 data-genre="${book.genre}" 
                                                 data-status="${
                                                   book.readStatus
-                                                }">
+                                                }"
+                                                data-started="${book.startedAt || ''}"
+                                                data-completed="${book.completedAt || ''}">
                                             Edit
                                         </button>
                                         <button class="btn btn-sm btn-danger delete-btn" 
@@ -365,6 +396,13 @@ document.addEventListener("click", function (e) {
     document.getElementById("edit-book-author").value = bookAuthor;
     document.getElementById("edit-book-genre").value = bookGenre;
     document.getElementById("edit-book-status").value = bookStatus;
+    // Fill hidden timestamp fields if present
+    const bookStarted = e.target.getAttribute("data-started");
+    const bookCompleted = e.target.getAttribute("data-completed");
+    const startedInput = document.getElementById("edit-book-started");
+    const completedInput = document.getElementById("edit-book-completed");
+    if (startedInput) startedInput.value = bookStarted || "";
+    if (completedInput) completedInput.value = bookCompleted || "";
 
     console.log("Form filled, attempting to show modal...");
 
@@ -599,4 +637,208 @@ function renderBookList(list) {
       .join("") +
     "</ul>"
   );
+}
+
+// ----------------- Stats / Charts -----------------
+async function loadStats() {
+  const token = localStorage.getItem("jwtToken");
+  try {
+    const res = await fetch("/api/books", {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+    });
+    const books = await res.json();
+    renderStats(books || []);
+  } catch (err) {
+    console.error("Error loading stats:", err);
+    document.getElementById("stats-tab").innerHTML = '<div class="alert alert-danger">Error loading stats.</div>';
+  }
+}
+
+function renderStats(books) {
+  // Top genres
+  const genreCounts = {};
+  // Exclude 'to-read' books from top-genres (per requirements)
+  books.forEach((b) => {
+    if (b.readStatus === 'to-read') return;
+    const g = (b.genre || "Unknown").trim() || "Unknown";
+    genreCounts[g] = (genreCounts[g] || 0) + 1;
+  });
+  const genres = Object.keys(genreCounts).sort((a, b) => genreCounts[b] - genreCounts[a]);
+  const genreData = genres.map((g) => genreCounts[g]);
+
+  // Books per month (past 12 months) - use completedAt or createdAt
+  const now = new Date();
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ label: d.toLocaleString(undefined, { month: "short", year: "numeric" }), year: d.getFullYear(), month: d.getMonth() });
+  }
+  const monthCounts = new Array(12).fill(0);
+  // Only count books that have a completion timestamp (completed books)
+  books.forEach((b) => {
+    const dateStr = b.completedAt;
+    if (!dateStr) return;
+    const dt = new Date(dateStr);
+    if (isNaN(dt)) return;
+    const idx = months.findIndex((m) => m.year === dt.getFullYear() && m.month === dt.getMonth());
+    if (idx >= 0) monthCounts[idx]++;
+  });
+
+  // Reading time per book for books completed in the past 30 days
+  const recentCompleted = [];
+  const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
+  books.forEach((b) => {
+    const end = b.completedAt || b.completedDate || b.endDate;
+    if (!end) return;
+    const e = new Date(end);
+    if (isNaN(e)) return;
+    // Only include books completed within the last 30 days
+    if (now - e > THIRTY_DAYS_MS) return;
+
+    // Determine start date (prefer startedAt, fallback to createdAt)
+    const start = b.startedAt || b.startDate || b.createdAt || b.createdAt;
+    if (!start) return;
+    const s = new Date(start);
+    if (isNaN(s)) return;
+
+    const days = Math.max(1, Math.round((e - s) / (1000 * 60 * 60 * 24)));
+    recentCompleted.push({ title: b.title || 'Untitled', author: b.author || '', days, completedAt: e });
+  });
+
+  // Sort recent completed by completion date (newest first)
+  recentCompleted.sort((a, b) => b.completedAt - a.completedAt);
+  const readingLabels = recentCompleted.map((r) => (r.author ? `${r.title} — ${r.author}` : r.title));
+  const readingDurations = recentCompleted.map((r) => r.days);
+
+  // Small stat cards (non-chart summaries)
+  try {
+    const totalBooks = books.length || 0;
+    const totalRead = books.filter((b) => b.readStatus === 'completed').length;
+    const totalEl = document.getElementById('total-books-count');
+    const vsEl = document.getElementById('total-vs-read-count');
+    if (totalEl) totalEl.textContent = String(totalBooks);
+    if (vsEl) vsEl.textContent = `${totalRead} / ${totalBooks}`;
+  } catch (err) {
+    console.error('Error updating small stat cards', err);
+  }
+
+  // Render charts (defensive if Chart not present)
+  if (typeof Chart === "undefined") {
+    const msg = 'Chart.js not loaded. Include Chart.js to view stats.';
+    console.warn(msg);
+    document.getElementById("stats-tab").insertAdjacentHTML('beforeend', `<div class="alert alert-warning mt-3">${msg}</div>`);
+    return;
+  }
+
+  // Top genres pie/doughnut
+  const genresCtx = document.getElementById("top-genres-chart").getContext("2d");
+  try {
+    new Chart(genresCtx, {
+      type: "doughnut",
+      data: {
+        labels: genres,
+        datasets: [{ data: genreData, backgroundColor: genres.map((_, i) => `hsl(${(i * 55) % 360} 60% 55%)`) }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+  } catch (err) {
+    console.error("Error rendering top genres chart", err);
+  }
+
+  // Books per month bar
+  const monthsCtx = document.getElementById("books-month-chart").getContext("2d");
+  try {
+    const maxCount = monthCounts.length ? Math.max(...monthCounts) : 0;
+    new Chart(monthsCtx, {
+      type: "bar",
+      data: { labels: months.map((m) => m.label), datasets: [{ label: "Books", data: monthCounts, backgroundColor: 'rgba(75, 108, 89, 0.7)' }] },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            },
+            suggestedMax: Math.max(1, maxCount + 1)
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error rendering months chart", err);
+  }
+
+  // Reading time chart (if we have any)
+  const rtCtxEl = document.getElementById("reading-time-chart");
+  if (readingLabels.length > 0 && rtCtxEl) {
+    const rtCtx = rtCtxEl.getContext("2d");
+    try {
+      const maxDur = readingDurations.length ? Math.max(...readingDurations) : 0;
+      new Chart(rtCtx, {
+        type: "bar",
+        data: { labels: readingLabels, datasets: [{ label: "Days to complete", data: readingDurations, backgroundColor: 'rgba(99, 102, 241, 0.7)' }] },
+        options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, suggestedMax: Math.max(1, maxDur + 1) } } }
+      });
+    } catch (err) {
+      console.error("Error rendering reading time chart", err);
+    }
+  } else if (rtCtxEl) {
+    // No data for reading time in past 30 days
+    document.getElementById("reading-time-note").textContent = "No books completed in the past 30 days.";
+  }
+
+  // Bookshelf chart: stacked bars per genre showing counts by status
+  try {
+    const shelfCtxEl = document.getElementById('bookshelf-chart');
+    if (shelfCtxEl && typeof Chart !== 'undefined') {
+      // Build genre list (include all books, even to-read)
+      const shelfCounts = {}; // { genre: { completed: n, 'currently-reading': m, 'to-read': k } }
+      books.forEach((b) => {
+        const g = (b.genre || 'Unknown').trim() || 'Unknown';
+        if (!shelfCounts[g]) shelfCounts[g] = { completed: 0, 'currently-reading': 0, 'to-read': 0 };
+        const s = b.readStatus || 'to-read';
+        if (!shelfCounts[g][s]) shelfCounts[g][s] = 0;
+        shelfCounts[g][s]++;
+      });
+
+      // Sort genres by total count and limit to top N for readability
+      const GENRE_LIMIT = 10;
+      const genreEntries = Object.keys(shelfCounts)
+        .map((g) => ({ genre: g, total: Object.values(shelfCounts[g]).reduce((a, b) => a + b, 0) }))
+        .sort((a, b) => b.total - a.total);
+      const chosenGenres = genreEntries.slice(0, GENRE_LIMIT).map((e) => e.genre);
+
+      const statuses = ['completed', 'currently-reading', 'to-read'];
+      const statusColors = {
+        completed: 'rgba(75, 192, 192, 0.8)',
+        'currently-reading': 'rgba(255, 205, 86, 0.85)',
+        'to-read': 'rgba(201, 203, 207, 0.9)'
+      };
+
+      const datasets = statuses.map((st) => ({
+        label: st.replace(/-/g, ' '),
+        data: chosenGenres.map((g) => shelfCounts[g] ? (shelfCounts[g][st] || 0) : 0),
+        backgroundColor: statusColors[st]
+      }));
+
+      // Use grouped bars (separate bars per status) rather than stacked
+      new Chart(shelfCtxEl.getContext('2d'), {
+        type: 'bar',
+        data: { labels: chosenGenres, datasets },
+        options: {
+          responsive: true,
+          scales: {
+            x: { stacked: false },
+            y: { stacked: false, beginAtZero: true, ticks: { stepSize: 1 } }
+          },
+          plugins: { legend: { position: 'bottom' } },
+          // Slightly tighten grouping for readability
+          datasets: { barPercentage: 0.7, categoryPercentage: 0.7 }
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error rendering bookshelf chart', err);
+  }
 }

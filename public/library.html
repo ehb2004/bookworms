@@ -47,6 +47,12 @@
                 <span class="ms-1 d-none d-sm-inline">My Friends</span>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="#" class="nav-link align-middle px-0 text-white" onclick="showTab('stats')">
+                <i class="bi bi-bar-chart-fill"></i>
+                <span class="ms-1 d-none d-sm-inline">My Stats</span>
+              </a>
+            </li>
           </ul>
         </div>
       </div>
@@ -147,6 +153,69 @@
             </div>
           </div>
         </div>
+
+        <!-- My Stats Tab -->
+        <div id="stats-tab" class="tab-content d-none">
+          <div class="mb-4">
+            <h2>My Stats</h2>
+            <p>Visualize your reading habits.</p>
+          </div>
+          <!-- Small stat cards -->
+          <div class="row mb-3">
+            <div class="col-auto">
+              <div class="card bg-light">
+                <div class="card-body p-2 text-center" style="min-width:140px;">
+                  <div class="h6 mb-0">Total Books</div>
+                  <div id="total-books-count" class="fs-4 fw-bold">0</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="card bg-light">
+                <div class="card-body p-2 text-center" style="min-width:180px;">
+                  <div class="h6 mb-0">Read — Total</div>
+                  <div id="total-vs-read-count" class="fs-4 fw-bold">0 / 0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Top Genres</h5>
+                  <canvas id="top-genres-chart" aria-label="Top genres chart"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Books Read (Past 12 Months)</h5>
+                  <canvas id="books-month-chart" aria-label="Books per month chart"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Reading Time (if available)</h5>
+                  <canvas id="reading-time-chart" aria-label="Reading time chart"></canvas>
+                  <p id="reading-time-note" class="small text-muted mt-2">If your book records include start/completed timestamps, this chart will show average time to complete books.</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Bookshelf by Genre & Status</h5>
+                  <canvas id="bookshelf-chart" aria-label="Bookshelf chart"></canvas>
+                  <p class="small text-muted mt-2">Counts of books you own grouped by genre and status.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -161,6 +230,8 @@
           <div class="modal-body">
             <form id="edit-book-form">
               <input type="hidden" id="edit-book-id" />
+              <input type="hidden" id="edit-book-started" />
+              <input type="hidden" id="edit-book-completed" />
               <div class="mb-3">
                 <label for="edit-book-title" class="form-label">Title</label>
                 <input type="text" class="form-control" id="edit-book-title" required />
@@ -234,10 +305,13 @@
         </div>
       </div>
     </div>
-    <!-- Scripts -->
-    <script src="scripts/frontend.js"></script>
+    <!-- Scripts: Bootstrap, Chart.js, then app frontend -->
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js for stats visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Frontend app logic -->
+    <script src="scripts/frontend.js"></script>
 </body>
 
 </html>
