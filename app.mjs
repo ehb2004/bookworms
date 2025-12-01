@@ -481,45 +481,51 @@ app.delete('/api/friends/delete/:friendId', authenticateToken, async (req, res) 
 });
 
 // view a friend's profile by username
-app.get('/api/friends/:username', authenticateToken, async (req, res) => {
+app.get('/api/friends/:identifier', authenticateToken, async (req, res) => {
   try {
     const meId = new ObjectId(req.user.userId);
-    const username = req.params.username;
+    const identifier = req.params.identifier;
 
-    const target = await db.collection('users').findOne({ username });
+    // Allow the client to pass either a username or a user id.
+    let target = null;
+    // If identifier looks like an ObjectId, try to find by _id first
+    if (ObjectId.isValid(identifier)) {
+      try {
+        target = await db.collection('users').findOne({ _id: new ObjectId(identifier) });
+      } catch (e) {
+        target = null;
+      }
+    }
+    // Fallback to username lookup if not found by id
+    if (!target) {
+      target = await db.collection('users').findOne({ username: identifier });
+    }
+
     if (!target) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const me = await db.collection('users').findOne({ _id: meId });
-    const isFriend =
-      me.friends && me.friends.some((id) => id.equals(target._id));
+    const isFriend = me.friends && me.friends.some((id) => id.equals(target._id));
 
     if (!isFriend) {
-      return res
-        .status(403)
-        .json({ error: 'You are not friends with this user' });
+      return res.status(403).json({ error: 'You are not friends with this user' });
     }
 
-    // 🔹 adjust this query if your books schema uses a different field
+    // Query books by userId. Some documents may store userId as ObjectId, others as a string.
     const userBooks = await db
       .collection('books')
-      .find({ userId: target._id })
+      .find({ $or: [{ userId: target._id }, { userId: String(target._id) }] })
       .toArray();
 
     const booksByStatus = {
-      'currently-reading': userBooks.filter(
-        (b) => b.readStatus === 'currently-reading'
-      ),
+      'currently-reading': userBooks.filter((b) => b.readStatus === 'currently-reading'),
       'to-read': userBooks.filter((b) => b.readStatus === 'to-read'),
       completed: userBooks.filter((b) => b.readStatus === 'completed')
     };
 
     res.json({
-      user: {
-        _id: target._id,
-        username: target.username
-      },
+      user: { _id: target._id, username: target.username },
       books: booksByStatus
     });
   } catch (error) {
