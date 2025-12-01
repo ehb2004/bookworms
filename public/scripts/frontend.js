@@ -710,6 +710,18 @@ function renderStats(books) {
   const readingLabels = recentCompleted.map((r) => (r.author ? `${r.title} — ${r.author}` : r.title));
   const readingDurations = recentCompleted.map((r) => r.days);
 
+  // Small stat cards (non-chart summaries)
+  try {
+    const totalBooks = books.length || 0;
+    const totalRead = books.filter((b) => b.readStatus === 'completed').length;
+    const totalEl = document.getElementById('total-books-count');
+    const vsEl = document.getElementById('total-vs-read-count');
+    if (totalEl) totalEl.textContent = String(totalBooks);
+    if (vsEl) vsEl.textContent = `${totalRead} / ${totalBooks}`;
+  } catch (err) {
+    console.error('Error updating small stat cards', err);
+  }
+
   // Render charts (defensive if Chart not present)
   if (typeof Chart === "undefined") {
     const msg = 'Chart.js not loaded. Include Chart.js to view stats.';
