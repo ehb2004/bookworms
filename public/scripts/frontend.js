@@ -657,7 +657,9 @@ async function loadStats() {
 function renderStats(books) {
   // Top genres
   const genreCounts = {};
+  // Exclude 'to-read' books from top-genres (per requirements)
   books.forEach((b) => {
+    if (b.readStatus === 'to-read') return;
     const g = (b.genre || "Unknown").trim() || "Unknown";
     genreCounts[g] = (genreCounts[g] || 0) + 1;
   });
@@ -672,8 +674,9 @@ function renderStats(books) {
     months.push({ label: d.toLocaleString(undefined, { month: "short", year: "numeric" }), year: d.getFullYear(), month: d.getMonth() });
   }
   const monthCounts = new Array(12).fill(0);
+  // Only count books that have a completion timestamp (completed books)
   books.forEach((b) => {
-    const dateStr = b.completedAt || b.createdAt || b.updatedAt || b.date;
+    const dateStr = b.completedAt;
     if (!dateStr) return;
     const dt = new Date(dateStr);
     if (isNaN(dt)) return;
@@ -771,5 +774,59 @@ function renderStats(books) {
   } else if (rtCtxEl) {
     // No data for reading time in past 30 days
     document.getElementById("reading-time-note").textContent = "No books completed in the past 30 days.";
+  }
+
+  // Bookshelf chart: stacked bars per genre showing counts by status
+  try {
+    const shelfCtxEl = document.getElementById('bookshelf-chart');
+    if (shelfCtxEl && typeof Chart !== 'undefined') {
+      // Build genre list (include all books, even to-read)
+      const shelfCounts = {}; // { genre: { completed: n, 'currently-reading': m, 'to-read': k } }
+      books.forEach((b) => {
+        const g = (b.genre || 'Unknown').trim() || 'Unknown';
+        if (!shelfCounts[g]) shelfCounts[g] = { completed: 0, 'currently-reading': 0, 'to-read': 0 };
+        const s = b.readStatus || 'to-read';
+        if (!shelfCounts[g][s]) shelfCounts[g][s] = 0;
+        shelfCounts[g][s]++;
+      });
+
+      // Sort genres by total count and limit to top N for readability
+      const GENRE_LIMIT = 10;
+      const genreEntries = Object.keys(shelfCounts)
+        .map((g) => ({ genre: g, total: Object.values(shelfCounts[g]).reduce((a, b) => a + b, 0) }))
+        .sort((a, b) => b.total - a.total);
+      const chosenGenres = genreEntries.slice(0, GENRE_LIMIT).map((e) => e.genre);
+
+      const statuses = ['completed', 'currently-reading', 'to-read'];
+      const statusColors = {
+        completed: 'rgba(75, 192, 192, 0.8)',
+        'currently-reading': 'rgba(255, 205, 86, 0.85)',
+        'to-read': 'rgba(201, 203, 207, 0.9)'
+      };
+
+      const datasets = statuses.map((st) => ({
+        label: st.replace(/-/g, ' '),
+        data: chosenGenres.map((g) => shelfCounts[g] ? (shelfCounts[g][st] || 0) : 0),
+        backgroundColor: statusColors[st]
+      }));
+
+      // Use grouped bars (separate bars per status) rather than stacked
+      new Chart(shelfCtxEl.getContext('2d'), {
+        type: 'bar',
+        data: { labels: chosenGenres, datasets },
+        options: {
+          responsive: true,
+          scales: {
+            x: { stacked: false },
+            y: { stacked: false, beginAtZero: true, ticks: { stepSize: 1 } }
+          },
+          plugins: { legend: { position: 'bottom' } },
+          // Slightly tighten grouping for readability
+          datasets: { barPercentage: 0.7, categoryPercentage: 0.7 }
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error rendering bookshelf chart', err);
   }
 }
