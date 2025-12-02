@@ -203,6 +203,7 @@ endpoints have been modified to fit this project.
 // Creating a book entry - now tied to the logged-in user
 app.post("/api/books", authenticateToken, async (req, res) => {
   try {
+    // Only accept these fields from the client; ignore any client-supplied timestamps
     const { title, author, genre, readStatus } = req.body;
 
     if (!title || !author || !genre || readStatus === undefined) {
@@ -219,6 +220,14 @@ app.post("/api/books", authenticateToken, async (req, res) => {
       createdAt: new Date(),
       userId: req.user.userId, // 👈 attach userId from JWT
     };
+
+    // Server-side timestamps: authoritative
+    if (readStatus === 'currently-reading') {
+      book.startedAt = new Date();
+    }
+    if (readStatus === 'completed') {
+      book.completedAt = new Date();
+    }
 
     const result = await db.collection("books").insertOne(book);
 
@@ -265,6 +274,10 @@ app.put("/api/books/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Invalid book ID" });
     }
 
+    // Read existing book to check previous timestamps/status
+    const existing = await db.collection('books').findOne({ _id: new ObjectId(id), userId: req.user.userId });
+    if (!existing) return res.status(404).json({ error: 'Book not found or not yours' });
+
     const updatedBook = {
       title,
       author,
@@ -272,6 +285,17 @@ app.put("/api/books/:id", authenticateToken, async (req, res) => {
       readStatus,
       updatedAt: new Date(),
     };
+
+    // Server-side enforcement of timestamps based on status transitions
+    const prevStatus = existing.readStatus;
+    // If transitioning into currently-reading and no startedAt exists, set it
+    if (prevStatus !== 'currently-reading' && readStatus === 'currently-reading' && !existing.startedAt) {
+      updatedBook.startedAt = new Date();
+    }
+    // If transitioning into completed and no completedAt exists, set it
+    if (prevStatus !== 'completed' && readStatus === 'completed' && !existing.completedAt) {
+      updatedBook.completedAt = new Date();
+    }
 
     // 👇 Ownership check: only update if this book belongs to the current user
     const result = await db.collection("books").updateOne(
@@ -283,8 +307,10 @@ app.put("/api/books/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Book not found or not yours" });
     }
 
+    // Return the updated book to the client
+    const updated = await db.collection('books').findOne({ _id: new ObjectId(id) });
     console.log(`Updated book with ID: ${id} for user ${req.user.userId}`);
-    res.json({ message: "Book updated successfully" });
+    res.json({ message: "Book updated successfully", book: updated });
   } catch (error) {
     console.error("Error updating book:", error);
     res.status(500).json({ error: "Failed to update book" });
@@ -322,4 +348,188 @@ app.delete("/api/books/:id", authenticateToken, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+// send friend request
+app.post('/api/friends/request/:username', authenticateToken, async (req, res) => {
+  try {
+    const fromId = new ObjectId(req.user.userId);
+    const toUsername = req.params.username;
+
+    const toUser = await db.collection('users').findOne({ username: toUsername });
+    if (!toUser) return res.status(404).json({ error: 'Target user not found' });
+
+    if (toUser._id.equals(fromId)) {
+      return res.status(400).json({ error: 'Cannot friend yourself' });
+    }
+
+    if (toUser.friends && toUser.friends.some(id => id.equals(fromId))) {
+      return res.status(400).json({ error: 'Already friends' });
+    }
+
+    if (toUser.incomingFriendRequests && toUser.incomingFriendRequests.some(id => id.equals(fromId))) {
+      return res.status(400).json({ error: 'Friend request already sent' });
+    }
+
+    await db.collection('users').updateOne(
+      { _id: toUser._id },
+      { $addToSet: { incomingFriendRequests: fromId } }
+    );
+
+    res.json({ message: 'Friend request sent' });
+  } catch (error) {
+    console.error('Error sending friend request:', error);
+    res.status(500).json({ error: 'Failed to send friend request' });
+  }
+});
+
+// shows incoming friend requests
+app.get('/api/friends/requests', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const me = await db.collection('users').findOne({ _id: meId });
+    const incoming = me.incomingFriendRequests || [];
+
+    const requestUsers = await db.collection('users')
+      .find({ _id: { $in: incoming } })
+      .project({ password: 0 })
+      .toArray();
+
+    res.json({ requests: requestUsers });
+  } catch (error) {
+    console.error('Error fetching friend requests:', error);
+    res.status(500).json({ error: 'Failed to fetch friend requests' });
+  }
+});
+
+// accept or reject friend request
+app.post('/api/friends/respond', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const { fromUserId, action } = req.body;
+    if (!fromUserId || !action) {
+      return res.status(400).json({ error: 'Missing parameters' });
+    }
+
+    const fromId = new ObjectId(fromUserId);
+
+    if (action === 'accept') {
+      await db.collection('users').updateOne(
+        { _id: meId },
+        {
+          $addToSet: { friends: fromId },
+          $pull: { incomingFriendRequests: fromId }
+        }
+      );
+      await db.collection('users').updateOne(
+        { _id: fromId },
+        { $addToSet: { friends: meId } }
+      );
+      res.json({ message: 'Friend request accepted' });
+    } else {
+      await db.collection('users').updateOne(
+        { _id: meId },
+        { $pull: { incomingFriendRequests: fromId } }
+      );
+      res.json({ message: 'Friend request rejected' });
+    }
+  } catch (error) {
+    console.error('Error responding to friend request:', error);
+    res.status(500).json({ error: 'Failed to respond to friend request' });
+  }
+});
+
+// get friends list
+app.get('/api/friends/list', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const me = await db.collection('users').findOne({ _id: meId });
+    const friends = me.friends || [];
+
+    const friendUsers = await db.collection('users')
+      .find({ _id: { $in: friends } })
+      .project({ password: 0, incomingFriendRequests: 0 })
+      .toArray();
+
+    res.json({ friends: friendUsers });
+  } catch (error) {
+    console.error('Error fetching friends list:', error);
+    res.status(500).json({ error: 'Failed to fetch friends list' });
+  }
+});
+
+// unfriend
+app.delete('/api/friends/delete/:friendId', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const friendId = new ObjectId(req.params.friendId);
+
+    await db.collection('users').updateOne(
+      { _id: meId },
+      { $pull: { friends: friendId } }
+    );
+    await db.collection('users').updateOne(
+      { _id: friendId },
+      { $pull: { friends: meId } }
+    );
+
+    res.json({ message: 'Unfriended successfully' });
+  } catch (error) {
+    console.error('Error unfriending:', error);
+    res.status(500).json({ error: 'Failed to unfriend' });
+  }
+});
+
+// view a friend's profile by username
+app.get('/api/friends/:identifier', authenticateToken, async (req, res) => {
+  try {
+    const meId = new ObjectId(req.user.userId);
+    const identifier = req.params.identifier;
+
+    // Allow the client to pass either a username or a user id.
+    let target = null;
+    // If identifier looks like an ObjectId, try to find by _id first
+    if (ObjectId.isValid(identifier)) {
+      try {
+        target = await db.collection('users').findOne({ _id: new ObjectId(identifier) });
+      } catch (e) {
+        target = null;
+      }
+    }
+    // Fallback to username lookup if not found by id
+    if (!target) {
+      target = await db.collection('users').findOne({ username: identifier });
+    }
+
+    if (!target) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const me = await db.collection('users').findOne({ _id: meId });
+    const isFriend = me.friends && me.friends.some((id) => id.equals(target._id));
+
+    if (!isFriend) {
+      return res.status(403).json({ error: 'You are not friends with this user' });
+    }
+
+    // Query books by userId. Some documents may store userId as ObjectId, others as a string.
+    const userBooks = await db
+      .collection('books')
+      .find({ $or: [{ userId: target._id }, { userId: String(target._id) }] })
+      .toArray();
+
+    const booksByStatus = {
+      'currently-reading': userBooks.filter((b) => b.readStatus === 'currently-reading'),
+      'to-read': userBooks.filter((b) => b.readStatus === 'to-read'),
+      completed: userBooks.filter((b) => b.readStatus === 'completed')
+    };
+
+    res.json({
+      user: { _id: target._id, username: target.username },
+      books: booksByStatus
+    });
+  } catch (error) {
+    console.error('Error fetching friend profile:', error);
+    res.status(500).json({ error: 'Failed to fetch friend profile' });
+  }
 });
